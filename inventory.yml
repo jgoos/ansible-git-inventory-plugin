@@ -27,7 +27,7 @@ cache_timeout: 3600
 # Create additional groups based on environment variable
 keyed_groups:
   # Create groups like env_prd, env_acc, env_qas, env_tst
-  - key: Environment | lower
+  - key: environment | lower
     prefix: env
     separator: "_"
   
@@ -48,16 +48,16 @@ compose:
   domain: inventory_hostname.split('.')[1:] | join('.') if '.' in inventory_hostname else ''
   
   # Convert environment to lowercase for consistency
-  environment: Environment | lower if Environment is defined else 'unknown'
+  env: environment | lower if environment is defined else 'unknown'
 
 # Create groups based on conditions
 groups:
   # Environment-based groups
-  production: Environment == "PRD"
-  acceptance: Environment == "ACC"
-  quality: Environment == "QAS"
-  test: Environment == "TST"
-  staging: Environment == "TST"
+  production: environment == "PRD"
+  acceptance: environment == "ACC"
+  quality: environment == "QAS"
+  test: environment == "TST"
+  staging: environment == "TST"
   
   # Service-based groups (based on group names)
   web_servers: "'web' in group_names"

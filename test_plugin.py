@@ -71,7 +71,7 @@ def validate_inventory_config():
         with open('inventory.yml', 'r') as f:
             config = yaml.safe_load(f)
         
-        required_keys = ['plugin', 'repo_url']
+        required_keys = ['plugin', 'hosts_directory']
         for key in required_keys:
             if key in config:
                 print(f"✅ {key}: {config[key]}")
@@ -80,7 +80,7 @@ def validate_inventory_config():
                 return False
         
         # Check optional but important keys
-        optional_keys = ['repo_branch', 'repo_path', 'dns_resolution', 'environment_detection']
+        optional_keys = ['environment_dirs', 'hosts_file_patterns', 'dns_resolution', 'environment_detection']
         for key in optional_keys:
             if key in config:
                 print(f"ℹ️  {key}: {config[key]}")

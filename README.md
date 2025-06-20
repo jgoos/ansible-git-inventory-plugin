@@ -63,7 +63,7 @@ cache_timeout: 3600
 
 # Dynamic group creation
 keyed_groups:
-  - key: Environment | lower
+  - key: environment | lower
     prefix: env
     separator: "_"
 
@@ -71,12 +71,12 @@ keyed_groups:
 compose:
   ansible_host: ansible_host | default(inventory_hostname)
   short_name: inventory_hostname.split('.')[0]
-  environment: Environment | lower if Environment is defined else 'unknown'
+  env: environment | lower if environment is defined else 'unknown'
 
 # Conditional groups
 groups:
-  production: Environment == "PRD"
-  staging: Environment == "TST"
+  production: environment == "PRD"
+  staging: environment == "TST"
   web_servers: "'web' in group_names"
 ```
 
@@ -167,7 +167,7 @@ The plugin will create the following inventory structure:
 - **Conditional groups**: `production`, `staging`, `web_servers`, etc.
 
 ### Host Variables
-- **Environment**: Automatically set from directory name (`PRD`, `ACC`, `QAS`, `TST`, etc.)
+- **environment**: Automatically set from directory name (`PRD`, `ACC`, `QAS`, `TST`, etc.)
 - **DNSName**: CNAME record if DNS resolution is enabled
 - **Custom variables**: From host file definitions and compose rules
 
@@ -233,7 +233,7 @@ When `dns_resolution: true`, the plugin performs CNAME lookups for each host and
 hostvars:
   web01.internal.example.com:
     DNSName: web01.external.example.com
-    Environment: PRD
+    environment: PRD
 ```
 
 ## Troubleshooting

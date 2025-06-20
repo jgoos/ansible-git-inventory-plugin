@@ -172,6 +172,11 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
         total_files = 0
         for env_dir in self.environment_dirs:
+            # Security check: prevent path traversal
+            if ".." in env_dir or os.path.isabs(env_dir):
+                display.warning(f"Skipping potentially unsafe environment directory: {env_dir}")
+                continue
+            
             env_path = os.path.join(self.hosts_directory, env_dir)
             
             if not os.path.exists(env_path):
@@ -248,6 +253,9 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             # Check for group definition [groupname]
             if "[" in entry and "]" in entry:
                 group = entry[entry.index("[")+1:entry.index("]")]
+                if not group:  # Empty group name
+                    display.warning(f"Empty group name in {filename}, skipping")
+                    continue
                 if group not in inventory_data["all"]["children"]:
                     inventory_data["all"]["children"].append(group)
                 continue
@@ -270,11 +278,13 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                         # Initialize host vars if not exists
                         if host not in inventory_data["_meta"]["hostvars"]:
                             inventory_data["_meta"]["hostvars"][host] = {}
+                        else:
+                            # Warn about duplicate host
+                            display.warning(f"Host {host} found in multiple locations, variables may be overwritten")
                     else:
                         # Process host variables (key=value format)
                         if "=" in item:
-                            item_key = item.split("=")[0]
-                            item_value = item.split("=")[1]
+                            item_key, item_value = item.split("=", 1)
                             inventory_data["_meta"]["hostvars"][host][item_key] = item_value
 
                 # Set environment from directory name if provided and environment detection is enabled
@@ -292,7 +302,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
     def _resolve_dns(self, hostname, inventory_data):
         """Perform DNS CNAME resolution for hostname"""
         try:
-            answer = dns.resolver.query(hostname, "CNAME")
+            answer = dns.resolver.resolve(hostname, "CNAME")
             for cname_val in answer:
                 inventory_data["_meta"]["hostvars"][hostname]["DNSName"] = cname_val.target.to_text()
                 break
@@ -327,7 +337,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         }
 
         environment = env_mapping.get(env_dir.lower(), env_dir.upper())
-        inventory_data["_meta"]["hostvars"][hostname]["Environment"] = environment
+        inventory_data["_meta"]["hostvars"][hostname]["environment"] = environment
         
         display.vv(f"Set environment {environment} for host {hostname} from directory {env_dir}")
 
@@ -337,7 +347,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             return
 
         # Skip if environment already set by directory
-        if "Environment" in inventory_data["_meta"]["hostvars"][hostname]:
+        if "environment" in inventory_data["_meta"]["hostvars"][hostname]:
             return
 
         environment = "MISC"  # default
@@ -351,7 +361,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         elif "_TST" in group:
             environment = "TST"
 
-        inventory_data["_meta"]["hostvars"][hostname]["Environment"] = environment
+        inventory_data["_meta"]["hostvars"][hostname]["environment"] = environment
 
     def _build_ansible_inventory(self, inventory_data):
         """Build Ansible inventory from processed data"""

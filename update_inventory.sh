@@ -43,7 +43,7 @@ trap cleanup EXIT
 log "Starting inventory update from $REPO_URL"
 
 # Create directory if it doesn't exist
-mkdir -p "$(dirname "$LOCAL_DIR")"
+mkdir -p "$LOCAL_DIR"
 
 # Clone or update repository
 if [ -d "$LOCAL_DIR/.git" ]; then
