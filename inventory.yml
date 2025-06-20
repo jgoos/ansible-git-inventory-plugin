@@ -1,0 +1,69 @@
+# Git Hosts Inventory Plugin Configuration
+# This file configures the git_hosts inventory plugin to read hosts files
+# from environment-specific subdirectories updated by cron from a git repository
+
+plugin: git_hosts
+
+# Local directory configuration (updated by cron)
+hosts_directory: /var/lib/ansible/inventory
+
+# Environment directories to scan for hosts files
+environment_dirs: ['prod', 'acc', 'tst', 'qas']
+
+# File patterns to look for in each environment directory
+hosts_file_patterns: ['hosts.yml', 'hosts.ini', 'hosts_*']
+
+# Plugin options
+dns_resolution: true      # Enable DNS CNAME resolution
+environment_detection: true  # Auto-detect environments from group names
+check_interval: 0        # File change check interval (0=disabled)
+
+# Caching (optional)
+cache: true
+cache_plugin: memory
+cache_timeout: 3600
+
+# Advanced inventory construction
+# Create additional groups based on environment variable
+keyed_groups:
+  # Create groups like env_prd, env_acc, env_qas, env_tst
+  - key: Environment | lower
+    prefix: env
+    separator: "_"
+  
+  # Create groups based on hostname patterns
+  - key: inventory_hostname.split('.')[0].split('-')[-1] if '-' in inventory_hostname else 'misc'
+    prefix: type
+    separator: "_"
+
+# Compose additional variables for hosts
+compose:
+  # Set ansible_host if not already defined
+  ansible_host: ansible_host | default(inventory_hostname)
+  
+  # Create short hostname variable
+  short_name: inventory_hostname.split('.')[0]
+  
+  # Create domain variable if FQDN
+  domain: inventory_hostname.split('.')[1:] | join('.') if '.' in inventory_hostname else ''
+  
+  # Convert environment to lowercase for consistency
+  environment: Environment | lower if Environment is defined else 'unknown'
+
+# Create groups based on conditions
+groups:
+  # Environment-based groups
+  production: Environment == "PRD"
+  acceptance: Environment == "ACC"
+  quality: Environment == "QAS"
+  test: Environment == "TST"
+  staging: Environment == "TST"
+  
+  # Service-based groups (based on group names)
+  web_servers: "'web' in group_names"
+  db_servers: "'db' in group_names or 'database' in group_names"
+  app_servers: "'app' in group_names or 'application' in group_names"
+  
+  # Special groups
+  dns_resolved: DNSName is defined
+  has_cname: DNSName is defined and DNSName != inventory_hostname 
