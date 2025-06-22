@@ -52,9 +52,17 @@ environment_detection: true
 ```yaml
 plugin: git_hosts
 hosts_directory: /var/lib/ansible/inventory
+environment_dirs: ['prod', 'acc', 'tst', 'qas', 'dt', 'sandbox']
 dns_resolution: true
 environment_detection: true
+auto_environment_patterns: true
 check_interval: 0  # File change checking disabled
+
+# Custom environment mappings (optional)
+environment_mapping:
+  sandbox: "SBOX"
+  dt: "DT"
+  integration: "INT"
 
 # Caching
 cache: true
@@ -172,12 +180,31 @@ The plugin will create the following inventory structure:
 - **Custom variables**: From host file definitions and compose rules
 
 ### Environment Detection
-Environment is primarily detected from the directory name:
+Environment is detected from directory names using multiple strategies:
+
+**1. Custom Mappings** (highest priority):
+```yaml
+environment_mapping:
+  sandbox: "SBOX"
+  dt: "DT"
+  integration: "INT"
+```
+
+**2. Built-in Common Mappings**:
 - `prod/` → `PRD`
 - `acc/` → `ACC` 
 - `tst/` → `TST`
 - `qas/` → `QAS`
-- Custom mappings supported (dev, staging, etc.)
+- `dev/` → `DEV`
+- `staging/` → `STG`
+
+**3. Automatic Pattern Generation** (when enabled):
+- Short names (≤3 chars): `dt/` → `DT`
+- Hyphenated: `data-team/` → `DT`
+- Consonant abbreviation: `backup/` → `BCK`
+- Suffix removal: `development/` → `DEV`
+
+**4. Fallback**: Directory name in uppercase
 
 ## Usage Examples
 
@@ -208,19 +235,47 @@ ansible-playbook site.yml --limit env_prd
 
 ## Environment Detection Rules
 
-The plugin automatically detects environments based on directory names:
+The plugin uses a sophisticated multi-strategy approach for environment detection:
 
-| Directory Name | Environment Code | Aliases |
-|----------------|------------------|---------|
+### **Priority Order**
+1. **Custom mappings** (from `environment_mapping` config)
+2. **Built-in mappings** (for common patterns)
+3. **Automatic pattern generation** (if enabled)
+4. **Simple uppercase fallback**
+
+### **Built-in Mappings**
+| Directory Name | Environment Code | Common Aliases |
+|----------------|------------------|----------------|
 | `prod/` | PRD | `production/`, `prd/` |
 | `acc/` | ACC | `acceptance/` |
 | `tst/` | TST | `test/`, `testing/` |
 | `qas/` | QAS | `quality/`, `qa/` |
 | `dev/` | DEV | `development/` |
 | `staging/` | STG | `stg/` |
-| Other | Directory name (uppercase) | Custom directories |
 
-**Fallback**: If no directory-based environment is detected, the plugin falls back to group name patterns (`*_PRD*`, `*_ACC*`, etc.)
+### **Automatic Pattern Examples**
+| Directory Name | Generated Code | Pattern Used |
+|----------------|----------------|--------------|
+| `dt/` | DT | Short name (≤3 chars) |
+| `sandbox/` | SBOX | Custom mapping |
+| `data-team/` | DT | Hyphenated abbreviation |
+| `backup/` | BCK | Consonant abbreviation |
+| `development/` | DEV | Suffix removal |
+| `integration-testing/` | IT | Multi-word abbreviation |
+
+### **Configuration Example**
+```yaml
+# Enable automatic patterns
+auto_environment_patterns: true
+
+# Custom mappings override everything
+environment_mapping:
+  dt: "DATA_TEAM"
+  sandbox: "SBOX"
+  integration: "INT"
+```
+
+**Fallback**: If no pattern matches, the plugin falls back to group name patterns (`*_PRD*`, `*_ACC*`, etc.)
 
 ## DNS Resolution
 

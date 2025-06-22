@@ -52,6 +52,16 @@ DOCUMENTATION = r'''
             required: False
             default: ['hosts.yml', 'hosts.ini', 'hosts_*']
             type: list
+        environment_mapping:
+            description: Custom mapping of directory names to environment codes
+            required: False
+            default: {}
+            type: dict
+        auto_environment_patterns:
+            description: Enable automatic environment code generation patterns
+            required: False
+            default: True
+            type: bool
         dns_resolution:
             description: Enable DNS CNAME resolution for host names
             required: False
@@ -88,11 +98,18 @@ EXAMPLES = r'''
 # Example inventory configuration file (inventory.yml)
 plugin: git_hosts
 hosts_directory: /var/lib/ansible/inventory
-environment_dirs: ['prod', 'acc', 'tst', 'qas']
+environment_dirs: ['prod', 'acc', 'tst', 'qas', 'dt', 'sandbox']
 hosts_file_patterns: ['hosts.yml', 'hosts.ini', 'hosts_*']
 dns_resolution: true
 environment_detection: true
+auto_environment_patterns: true
 check_interval: 300  # Check for changes every 5 minutes
+
+# Custom environment mappings (optional)
+environment_mapping:
+  sandbox: "SBOX"
+  dt: "DT"
+  integration: "INT"
 
 # Create additional groups based on environment
 keyed_groups:
@@ -136,6 +153,8 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         self.hosts_directory = self.get_option('hosts_directory')
         self.environment_dirs = self.get_option('environment_dirs')
         self.hosts_file_patterns = self.get_option('hosts_file_patterns')
+        self.environment_mapping = self.get_option('environment_mapping')
+        self.auto_environment_patterns = self.get_option('auto_environment_patterns')
         self.dns_resolution = self.get_option('dns_resolution')
         self.environment_detection = self.get_option('environment_detection')
         self.check_interval = self.get_option('check_interval')
@@ -313,12 +332,28 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             display.vv(f"DNS resolution failed for {hostname}: {e}")
 
     def _set_environment_from_directory(self, hostname, env_dir, inventory_data):
-        """Set environment based on directory name"""
+        """Set environment based on directory name with dynamic mapping"""
         if not hostname or not env_dir:
             return
 
-        # Map directory names to environment codes
-        env_mapping = {
+        environment = self._generate_environment_code(env_dir)
+        inventory_data["_meta"]["hostvars"][hostname]["environment"] = environment
+        
+        display.vv(f"Set environment {environment} for host {hostname} from directory {env_dir}")
+
+    def _generate_environment_code(self, env_dir):
+        """Generate environment code from directory name using multiple strategies"""
+        if not env_dir:
+            return "MISC"
+
+        env_dir_lower = env_dir.lower()
+        
+        # 1. Check custom user mapping first
+        if self.environment_mapping and env_dir_lower in self.environment_mapping:
+            return self.environment_mapping[env_dir_lower]
+        
+        # 2. Check built-in common mappings (for backward compatibility)
+        built_in_mapping = {
             'prod': 'PRD',
             'production': 'PRD',
             'prd': 'PRD',
@@ -335,11 +370,65 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             'staging': 'STG',
             'stg': 'STG'
         }
-
-        environment = env_mapping.get(env_dir.lower(), env_dir.upper())
-        inventory_data["_meta"]["hostvars"][hostname]["environment"] = environment
         
-        display.vv(f"Set environment {environment} for host {hostname} from directory {env_dir}")
+        if env_dir_lower in built_in_mapping:
+            return built_in_mapping[env_dir_lower]
+        
+        # 3. Apply automatic patterns if enabled
+        if self.auto_environment_patterns:
+            return self._auto_generate_environment_code(env_dir)
+        
+        # 4. Fallback to uppercase directory name
+        return env_dir.upper()
+
+    def _auto_generate_environment_code(self, env_dir):
+        """Automatically generate environment codes using intelligent patterns"""
+        env_dir_clean = env_dir.lower().strip()
+        
+        # Pattern 1: If 3 characters or less, use uppercase
+        if len(env_dir_clean) <= 3:
+            return env_dir_clean.upper()
+        
+        # Pattern 2: Look for common abbreviation patterns
+        # Remove common suffixes (prioritize longer suffixes first)
+        suffixes_to_remove = ['environment', 'ment', 'env']
+        for suffix in suffixes_to_remove:
+            if env_dir_clean.endswith(suffix):
+                base = env_dir_clean[:-len(suffix)].rstrip('-_')
+                if len(base) >= 2:
+                    return base.upper()
+        
+        # Pattern 3: Generate abbreviation from longer names
+        if len(env_dir_clean) > 3:
+            # Try to create meaningful abbreviation
+            
+            # For hyphenated/underscored names, take first letter of each part
+            if '-' in env_dir_clean or '_' in env_dir_clean:
+                parts = env_dir_clean.replace('_', '-').split('-')
+                if len(parts) > 1:
+                    abbrev = ''.join([part[0] for part in parts if part and part[0].isalpha()])
+                    if len(abbrev) >= 2:
+                        return abbrev.upper()
+            
+            # For camelCase or mixed case, extract capitals
+            if any(c.isupper() for c in env_dir):
+                capitals = ''.join([c for c in env_dir if c.isupper()])
+                if len(capitals) >= 2:
+                    return capitals
+            
+            # For words with vowels, try consonant abbreviation
+            vowels = 'aeiou'
+            consonants = ''.join([c for c in env_dir_clean if c not in vowels and c.isalpha()])
+            if len(consonants) >= 3:
+                return consonants[:3].upper()
+            elif len(consonants) == 2:
+                return consonants.upper()
+            
+            # Take first 3 characters as last resort
+            return env_dir_clean[:3].upper()
+        
+        # Final fallback
+        return env_dir.upper()
 
     def _detect_environment(self, hostname, group, inventory_data):
         """Detect and set environment based on group name (fallback method)"""

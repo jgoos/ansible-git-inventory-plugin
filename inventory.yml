@@ -8,10 +8,19 @@ plugin: git_hosts
 hosts_directory: /var/lib/ansible/inventory
 
 # Environment directories to scan for hosts files
-environment_dirs: ['prod', 'acc', 'tst', 'qas']
+environment_dirs: ['prod', 'acc', 'tst', 'qas', 'dt', 'sandbox']
 
 # File patterns to look for in each environment directory
 hosts_file_patterns: ['hosts.yml', 'hosts.ini', 'hosts_*']
+
+# Custom environment mappings (optional)
+environment_mapping:
+  sandbox: "SBOX"
+  dt: "DT"
+  integration: "INT"
+
+# Enable automatic environment code generation
+auto_environment_patterns: true
 
 # Plugin options
 dns_resolution: true      # Enable DNS CNAME resolution
